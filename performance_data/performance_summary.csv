@@ -1,0 +1,4 @@
+language,exec_time_sec_median,exec_time_sec_mean,exec_time_sec_std,exec_time_sec_min,exec_time_sec_max,peak_memory_mb_median,peak_memory_mb_mean,peak_memory_mb_std,peak_memory_mb_min,peak_memory_mb_max
+Julia,33.2445,34.1263,3.1517,31.6664,58.4089,97.7656,97.7656,0.0,97.7656,97.7656
+Python,1.6828,1.6995,0.0702,1.6463,2.1111,97.7656,97.7144,0.0809,97.5156,97.7656
+R,4.3103,4.445,0.2825,4.112,5.3951,97.7656,97.7656,0.0,97.7656,97.7656
