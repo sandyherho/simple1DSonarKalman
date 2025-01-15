@@ -1,0 +1,24 @@
+Statistical Analysis Summary for Peak Memory
+==================================================
+
+1. Kruskal-Wallis Test:
+   H-statistic: 359.555
+   p-value: 8.388e-79
+   Interpretation: highly significant
+
+2. Effect Size Analysis (Cohen's d):
+   Julia_vs_Python:
+   - Effect size: 0.896
+   - Interpretation: large
+   - Practical significance: Large and meaningful difference
+
+   Julia_vs_R:
+   - Effect size: 0.000
+   - Interpretation: negligible
+   - Practical significance: Small or negligible difference
+
+   Python_vs_R:
+   - Effect size: -0.896
+   - Interpretation: large
+   - Practical significance: Large and meaningful difference
+

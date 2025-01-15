@@ -3,37 +3,19 @@
 """
 Performance Analysis Module for Multi-Language Computational Benchmarking
 
-This script implements a comprehensive statistical analysis framework incorporating
-bootstrap resampling methods to assess performance metrics across programming languages.
-The analysis integrates non-parametric hypothesis testing, effect size quantification,
-and uncertainty estimation through bootstrap simulation.
+This script performs statistical analysis of computational performance metrics
+across programming languages using Kruskal-Wallis tests, Cohen's d effect size,
+and visualization through violin plots.
 
 Author: Sandy Herho
-Email: sandyherho@email.ucr.edu
+Email: sandy.herho@email.ucr.edu
 Date: January 14, 2025
-
-Statistical Methodology:
-    - Bootstrap resampling (n=10000) for robust inference
-    - Kruskal-Wallis H-test with bootstrap confidence intervals
-    - Dunn's post-hoc test with Bonferroni correction
-    - Cohen's d effect size analysis with bootstrap uncertainty estimation
-    - Kernel Density Estimation for distribution visualization
-    
-Dependencies:
-    - pandas>=1.5.0: Data manipulation and analysis
-    - numpy>=1.21.0: Numerical computations
-    - seaborn>=0.11.0: Statistical visualization
-    - matplotlib>=3.5.0: Plotting functionality
-    - scipy>=1.7.0: Statistical computations
-    - scikit_posthocs>=0.7.0: Post-hoc statistical testing
+License: WTFPL
 """
 
 import os
-import sys
-from typing import Tuple, List, Dict
+from typing import Dict, Tuple
 from itertools import combinations
-from dataclasses import dataclass
-import pickle
 
 import pandas as pd
 import numpy as np
@@ -42,239 +24,220 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from scikit_posthocs import posthoc_dunn
 
-@dataclass
-class BootstrapResults:
-    """Container for bootstrap analysis results."""
-    bootstrap_samples: np.ndarray
-    confidence_intervals: Tuple[float, float]
-    point_estimate: float
-    standard_error: float
-
-def bootstrap_sample(data: np.ndarray, n_bootstrap: int = 10000) -> np.ndarray:
+def calculate_cohens_d(x: np.ndarray, y: np.ndarray) -> float:
     """
-    Generate bootstrap samples from input data.
+    Calculate Cohen's d effect size.
     
     Args:
-        data: Input data array
-        n_bootstrap: Number of bootstrap iterations
+        x: First sample
+        y: Second sample
     
     Returns:
-        Array of bootstrap samples
+        Cohen's d value
     """
-    return np.array([
-        np.random.choice(data, size=len(data), replace=True)
-        for _ in range(n_bootstrap)
-    ])
+    nx, ny = len(x), len(y)
+    vx, vy = np.var(x, ddof=1), np.var(y, ddof=1)
+    
+    # Pooled standard deviation
+    pooled_sd = np.sqrt(((nx - 1) * vx + (ny - 1) * vy) / (nx + ny - 2))
+    
+    # Handle zero standard deviation
+    if pooled_sd == 0:
+        return 0.0 if np.mean(x) == np.mean(y) else float('inf')
+    
+    return (np.mean(x) - np.mean(y)) / pooled_sd
 
-def bootstrap_statistic(data: np.ndarray, statistic: callable, 
-                       n_bootstrap: int = 10000, 
-                       confidence_level: float = 0.95) -> BootstrapResults:
+def interpret_cohens_d(d: float) -> str:
+    """Interpret Cohen's d effect size."""
+    d = abs(d)
+    if d < 0.2:
+        return "negligible"
+    elif d < 0.5:
+        return "small"
+    elif d < 0.8:
+        return "medium"
+    else:
+        return "large"
+
+def interpret_pvalue(p: float) -> str:
+    """Interpret p-value significance."""
+    if p < 0.001:
+        return "highly significant"
+    elif p < 0.01:
+        return "very significant"
+    elif p < 0.05:
+        return "significant"
+    else:
+        return "not significant"
+
+def create_violin_plots(data: pd.DataFrame, output_dir: str) -> None:
     """
-    Perform bootstrap analysis for a given statistic.
+    Create violin plots for execution time and memory usage.
     
     Args:
-        data: Input data array
-        statistic: Statistical function to bootstrap
-        n_bootstrap: Number of bootstrap iterations
-        confidence_level: Confidence level for intervals
-    
-    Returns:
-        BootstrapResults object containing analysis results
+        data: DataFrame containing performance metrics
+        output_dir: Directory to save plots
     """
-    bootstrap_samples = bootstrap_sample(data, n_bootstrap)
-    bootstrap_statistics = np.array([statistic(sample) for sample in bootstrap_samples])
-    
-    point_estimate = statistic(data)
-    standard_error = np.std(bootstrap_statistics)
-    
-    alpha = 1 - confidence_level
-    confidence_intervals = np.percentile(
-        bootstrap_statistics, 
-        [100 * alpha/2, 100 * (1 - alpha/2)]
-    )
-    
-    return BootstrapResults(
-        bootstrap_samples=bootstrap_statistics,
-        confidence_intervals=confidence_intervals,
-        point_estimate=point_estimate,
-        standard_error=standard_error
-    )
-
-def calculate_cohens_d_bootstrap(group1: np.ndarray, group2: np.ndarray,
-                               n_bootstrap: int = 10000) -> BootstrapResults:
-    """
-    Calculate Cohen's d effect size with bootstrap confidence intervals.
-    
-    Args:
-        group1: First group's data
-        group2: Second group's data
-        n_bootstrap: Number of bootstrap iterations
-    
-    Returns:
-        BootstrapResults object for Cohen's d
-    """
-    def cohens_d(x, y):
-        nx, ny = len(x), len(y)
-        vx, vy = np.var(x, ddof=1), np.var(y, ddof=1)
-        pooled_se = np.sqrt(((nx - 1) * vx + (ny - 1) * vy) / (nx + ny - 2))
-        return (np.mean(x) - np.mean(y)) / pooled_se
-    
-    # Generate paired bootstrap samples
-    bootstrap_d = []
-    for _ in range(n_bootstrap):
-        boot1 = np.random.choice(group1, size=len(group1), replace=True)
-        boot2 = np.random.choice(group2, size=len(group2), replace=True)
-        bootstrap_d.append(cohens_d(boot1, boot2))
-    
-    point_estimate = cohens_d(group1, group2)
-    ci = np.percentile(bootstrap_d, [2.5, 97.5])
-    se = np.std(bootstrap_d)
-    
-    return BootstrapResults(
-        bootstrap_samples=np.array(bootstrap_d),
-        confidence_intervals=ci,
-        point_estimate=point_estimate,
-        standard_error=se
-    )
-
-def create_bootstrap_distribution_plot(bootstrap_results: Dict[str, BootstrapResults],
-                                    metric: str, output_path: str) -> None:
-    """
-    Generate visualization of bootstrap sampling distributions.
-    
-    Args:
-        bootstrap_results: Dictionary of BootstrapResults objects
-        metric: Name of the metric being analyzed
-        output_path: Path to save the figure
-    """
-    plt.figure(figsize=(10, 6))
-    colors = plt.cm.Set2(np.linspace(0, 1, len(bootstrap_results)))
-    
-    for (name, results), color in zip(bootstrap_results.items(), colors):
-        sns.kdeplot(results.bootstrap_samples, label=name, color=color)
-        plt.axvline(results.point_estimate, color=color, linestyle='--', alpha=0.5)
-        plt.fill_between(
-            np.linspace(results.confidence_intervals[0], 
-                       results.confidence_intervals[1], 100),
-            0, 1, color=color, alpha=0.2
-        )
-    
-    plt.xlabel(f'Bootstrap {metric}')
-    plt.ylabel('Density')
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=350, bbox_inches='tight')
-    plt.close()
-
-def configure_plotting_style() -> None:
-    """Configure visualization style settings."""
     plt.style.use('bmh')
-    sns.set_context("paper", font_scale=1.2)
-
-def create_performance_plot(data: pd.DataFrame, metric: str, 
-                          output_path: str) -> None:
-    """
-    Generate and save KDE plot for performance metric distribution.
     
-    Args:
-        data: Input DataFrame containing performance metrics
-        metric: Column name of the metric to analyze
-        output_path: Path to save the figure
-    """
-    plt.figure(figsize=(8, 6))
-    sns.kdeplot(data=data, x=metric, hue='language', common_norm=False)
-    plt.xlabel(metric.replace('_', ' ').title())
-    plt.ylabel('Density')
+    # Execution Time Violin Plot
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=data, x='language', y='exec_time_sec')
+    plt.xlabel('Programming Language')
+    plt.ylabel('Execution Time (seconds)')
+    plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=350, bbox_inches='tight')
+    plt.savefig(f'{output_dir}/execution_time_box.png', dpi=350, bbox_inches='tight')
+    plt.close()
+    
+    # Memory Usage Violin Plot
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=data, x='language', y='peak_memory_mb')
+    plt.xlabel('Programming Language')
+    plt.ylabel('Peak Memory (MB)')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/peak_memory_box.png', dpi=350, bbox_inches='tight')
     plt.close()
 
-def save_results(results: Dict, output_path: str) -> None:
+def perform_statistical_analysis(data: pd.DataFrame) -> Dict:
     """
-    Save analysis results to pickle file.
+    Perform statistical analysis including Kruskal-Wallis and Cohen's d.
+    
+    Args:
+        data: DataFrame containing performance metrics
+    
+    Returns:
+        Dictionary containing analysis results
+    """
+    metrics = {
+        'exec_time_sec': 'Execution Time',
+        'peak_memory_mb': 'Peak Memory'
+    }
+    
+    results = {}
+    for col, name in metrics.items():
+        # Kruskal-Wallis test
+        groups = [group[col].values for _, group in data.groupby('language')]
+        h_stat, p_value = stats.kruskal(*groups)
+        
+        # Dunn's post-hoc test
+        dunn = posthoc_dunn(data, val_col=col, group_col='language', p_adjust='bonferroni')
+        
+        # Cohen's d for each pair
+        languages = sorted(data['language'].unique())
+        effect_sizes = {}
+        for lang1, lang2 in combinations(languages, 2):
+            group1 = data[data['language'] == lang1][col].values
+            group2 = data[data['language'] == lang2][col].values
+            d = calculate_cohens_d(group1, group2)
+            effect_sizes[f"{lang1}_vs_{lang2}"] = d
+        
+        results[name] = {
+            'kruskal_wallis': {'statistic': h_stat, 'p_value': p_value},
+            'dunn': dunn,
+            'cohens_d': effect_sizes
+        }
+    
+    return results
+
+def save_results_with_interpretation(results: Dict, output_dir: str) -> None:
+    """
+    Save statistical results with interpretation to CSV files.
     
     Args:
         results: Dictionary containing analysis results
-        output_path: Path to save results
+        output_dir: Directory to save results
     """
-    with open(output_path, 'wb') as f:
-        pickle.dump(results, f)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for metric_name, metric_results in results.items():
+        # Kruskal-Wallis results
+        kw_df = pd.DataFrame({
+            'Metric': [metric_name],
+            'H-statistic': [metric_results['kruskal_wallis']['statistic']],
+            'p-value': [metric_results['kruskal_wallis']['p_value']],
+            'Interpretation': [interpret_pvalue(metric_results['kruskal_wallis']['p_value'])]
+        })
+        kw_df.to_csv(f'{output_dir}/kruskal_wallis_{metric_name.lower().replace(" ", "_")}.csv', 
+                     index=False)
+        
+        # Dunn's test results with interpretation
+        dunn_df = metric_results['dunn'].copy()
+        dunn_df.to_csv(f'{output_dir}/dunns_test_{metric_name.lower().replace(" ", "_")}.csv')
+        
+        # Cohen's d results with interpretation
+        cohen_data = []
+        for pair, d in metric_results['cohens_d'].items():
+            cohen_data.append({
+                'Comparison': pair,
+                'Cohens_d': d,
+                'Interpretation': interpret_cohens_d(d),
+                'Effect Size': f"{d:.3f} ({interpret_cohens_d(d)})"
+            })
+        pd.DataFrame(cohen_data).to_csv(
+            f'{output_dir}/cohens_d_{metric_name.lower().replace(" ", "_")}.csv',
+            index=False
+        )
+        
+        # Create interpretation summary
+        with open(f'{output_dir}/interpretation_{metric_name.lower().replace(" ", "_")}.txt', 'w') as f:
+            f.write(f"Statistical Analysis Summary for {metric_name}\n")
+            f.write("=" * 50 + "\n\n")
+            
+            # Kruskal-Wallis interpretation
+            kw_result = metric_results['kruskal_wallis']
+            f.write("1. Kruskal-Wallis Test:\n")
+            f.write(f"   H-statistic: {kw_result['statistic']:.3f}\n")
+            f.write(f"   p-value: {kw_result['p_value']:.3e}\n")
+            f.write(f"   Interpretation: {interpret_pvalue(kw_result['p_value'])}\n\n")
+            
+            # Effect size interpretation
+            f.write("2. Effect Size Analysis (Cohen's d):\n")
+            for pair, d in metric_results['cohens_d'].items():
+                f.write(f"   {pair}:\n")
+                f.write(f"   - Effect size: {d:.3f}\n")
+                f.write(f"   - Interpretation: {interpret_cohens_d(d)}\n")
+                
+                # Add practical significance
+                if abs(d) > 0.8:
+                    f.write("   - Practical significance: Large and meaningful difference\n")
+                elif abs(d) > 0.5:
+                    f.write("   - Practical significance: Moderate and noticeable difference\n")
+                else:
+                    f.write("   - Practical significance: Small or negligible difference\n")
+                f.write("\n")
 
 def main():
-    """
-    Main execution function for performance analysis.
-    Implements bootstrap-based statistical analysis framework.
-    """
-    N_BOOTSTRAP = 10000  # Number of bootstrap iterations
-    
+    """Main execution function for performance analysis."""
     # Create output directories
     os.makedirs('../figs', exist_ok=True)
-    os.makedirs('../bootstrap_performance', exist_ok=True)
+    os.makedirs('../analysis_results', exist_ok=True)
     
-    # Read and process data
-    try:
-        df = pd.read_csv('../performance_data/performance_data.csv')
-    except FileNotFoundError:
-        print("Error: Performance data file not found")
-        sys.exit(1)
+    # Read data
+    df = pd.read_csv('../performance_data/performance_data.csv')
     
-    # Configure plotting style
-    configure_plotting_style()
+    # Create violin plots
+    create_violin_plots(df, '../figs')
     
-    # Initialize results storage
-    bootstrap_results = {
-        'execution_time': {},
-        'peak_memory': {}
-    }
+    # Perform statistical analysis
+    results = perform_statistical_analysis(df)
     
-    # Perform bootstrap analysis for each language pair
-    languages = sorted(df['language'].unique())
-    metrics = {
-        'execution_time': 'exec_time_sec',
-        'peak_memory': 'peak_memory_mb'
-    }
+    # Save results with interpretation
+    save_results_with_interpretation(results, '../analysis_results')
     
-    for metric_name, metric_col in metrics.items():
-        for lang1, lang2 in combinations(languages, 2):
-            group1 = df[df['language'] == lang1][metric_col].values
-            group2 = df[df['language'] == lang2][metric_col].values
-            
-            # Calculate bootstrapped Cohen's d
-            effect_size_results = calculate_cohens_d_bootstrap(
-                group1, group2, N_BOOTSTRAP
-            )
-            
-            pair_name = f"{lang1}_vs_{lang2}"
-            bootstrap_results[metric_name][pair_name] = effect_size_results
-    
-    # Create bootstrap distribution plots
-    for metric_name in metrics:
-        create_bootstrap_distribution_plot(
-            bootstrap_results[metric_name],
-            metric_name,
-            f'../figs/{metric_name}_bootstrap_distributions.png'
-        )
-    
-    # Create performance distribution plots
-    for metric_name, metric_col in metrics.items():
-        create_performance_plot(
-            df, metric_col,
-            f'../figs/{metric_name}_distribution.png'
-        )
-    
-    # Save complete results
-    save_results(bootstrap_results, '../bootstrap_performance/bootstrap_analysis.pkl')
-    
-    # Print summary statistics
-    print("\nBootstrap Analysis Summary:")
-    for metric_name, metric_results in bootstrap_results.items():
-        print(f"\n{metric_name.replace('_', ' ').title()}:")
-        for pair_name, results in metric_results.items():
-            print(f"\n{pair_name}:")
-            print(f"Cohen's d: {results.point_estimate:.3f}")
-            print(f"95% CI: [{results.confidence_intervals[0]:.3f}, "
-                  f"{results.confidence_intervals[1]:.3f}]")
-            print(f"Standard Error: {results.standard_error:.3f}")
+    # Print summary to console
+    print("\nAnalysis Summary:")
+    for metric_name, metric_results in results.items():
+        print(f"\n{metric_name}:")
+        print(f"Kruskal-Wallis:")
+        print(f"H-statistic: {metric_results['kruskal_wallis']['statistic']:.3f}")
+        print(f"p-value: {metric_results['kruskal_wallis']['p_value']:.3e}")
+        print(f"Interpretation: {interpret_pvalue(metric_results['kruskal_wallis']['p_value'])}")
+        
+        print("\nCohen's d:")
+        for pair, d in metric_results['cohens_d'].items():
+            print(f"{pair}: {d:.3f} ({interpret_cohens_d(d)})")
 
 if __name__ == "__main__":
     main()

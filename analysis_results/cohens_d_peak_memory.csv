@@ -1,0 +1,4 @@
+Comparison,Cohens_d,Interpretation,Effect Size
+Julia_vs_Python,0.8960411187706471,large,0.896 (large)
+Julia_vs_R,0.0,negligible,0.000 (negligible)
+Python_vs_R,-0.8960411187706471,large,-0.896 (large)

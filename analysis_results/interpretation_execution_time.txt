@@ -1,0 +1,24 @@
+Statistical Analysis Summary for Execution Time
+==================================================
+
+1. Kruskal-Wallis Test:
+   H-statistic: 1332.445
+   p-value: 4.605e-290
+   Interpretation: highly significant
+
+2. Effect Size Analysis (Cohen's d):
+   Julia_vs_Python:
+   - Effect size: 14.547
+   - Interpretation: large
+   - Practical significance: Large and meaningful difference
+
+   Julia_vs_R:
+   - Effect size: 13.265
+   - Interpretation: large
+   - Practical significance: Large and meaningful difference
+
+   Python_vs_R:
+   - Effect size: -13.337
+   - Interpretation: large
+   - Practical significance: Large and meaningful difference
+

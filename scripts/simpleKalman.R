@@ -7,6 +7,7 @@
 #' 
 #' Author: Sandy Herho (sandy.herho@email.ucr.edu)
 #' Date: January 12, 2025
+#' License: WTFPL
 
 # Load required packages with error handling
 suppressPackageStartupMessages({
