@@ -7,6 +7,7 @@ and velocity. Results are saved to CSV files for further analysis.
 
 Author: Sandy Herho (sandy.herho@email.ucr.edu)
 Date: January 12, 2025
+License: WTFPL
 """
 
 using MAT
