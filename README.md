@@ -1,5 +1,6 @@
 # Supporting Material for "Performance Analysis of 1D Linear Kalman Filter in Modern Scientific Computing Environments"
 
+[![DOI](https://zenodo.org/badge/915642543.svg)](https://doi.org/10.5281/zenodo.14663442)
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
 [![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
 
